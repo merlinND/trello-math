@@ -1,26 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @author: github.com/tintinweb
+# @author: github.com/merlinND
+# Forked from: github.com/tintinweb
 
 from __future__ import print_function
-import requests
-import time
-import websockets
+
+import asyncio
 import json
+import logging
+import requests
 import socket
 import subprocess
 import time
+import time
+import websocket
 
-SCRIPT_HOTKEYS_F12_DEVTOOLS_F5_REFRESH = """document.addEventListener("keydown", function (e) {
-    if (e.which === 123) {
-        //F12
-        require("electron").remote.BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
-    } else if (e.which === 116) {
-        //F5
-        location.reload();
-    }
-});"""
-
+logger = logging.getLogger(__name__)
 
 class LazyWebsocket(object):
     def __init__(self, url):
@@ -29,8 +24,7 @@ class LazyWebsocket(object):
 
     def _connect(self):
         if not self.ws:
-            self.ws = yield from websockets.connect(self.url)
-            self.ws.send(None)
+            self.ws = websocket.create_connection(self.url)
         return self.ws
 
     def send(self, *args, **kwargs):
@@ -46,6 +40,9 @@ class LazyWebsocket(object):
     def close(self):
         self.ws.close()
 
+    def __str__(self):
+        return "LazyWebsocket[url={}, ws={}]".format(self.url, self.ws)
+
 
 class ElectronRemoteDebugger(object):
     def __init__(self, host, port):
@@ -60,6 +57,7 @@ class ElectronRemoteDebugger(object):
             url = w.get("webSocketDebuggerUrl")
             if not url:
                 continue
+            print("Got websocket URL: {}".format(url))
             w['ws'] = LazyWebsocket(url)
             ret.append(w)
         return ret
@@ -76,11 +74,7 @@ class ElectronRemoteDebugger(object):
         raise ce
 
 
-    def sendrcv(self, w, msg):
-        return w['ws'].sendrcv(msg)
-
     def eval(self, w, expression):
-
         data = {'id': 1,
                 'method': "Runtime.evaluate",
                 'params': {'contextId': 1,
@@ -93,24 +87,25 @@ class ElectronRemoteDebugger(object):
                            'userGesture': True}}
 
         ret = json.loads(w['ws'].sendrcv(json.dumps(data)))
+        print(ret)
         if "result" not in ret:
             return ret
-        if ret['result']['wasThrown']:
+        if 'wasThrown' in ret['result']:
             raise Exception(ret['result']['result'])
         return ret['result']
 
     @classmethod
     def execute(cls, path):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('', 0))
-        port = sock.getsockname()[1]
-        sock.close()
+        # Get a free port number on which to run the remote debugger.
+        port = 56955
+        # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # sock.bind(('', 0))
+        # port = sock.getsockname()[1]
+        # sock.close()
 
         cmd = "%s %s" % (path, "--remote-debugging-port=%d" % port)
-        print(cmd)
+        logger.debug(cmd)
         p = subprocess.Popen(cmd, shell=True)
-        # if not p>0:
-        #     raise Exception("Could not execute cmd: %r"%cmd)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         for _ in range(30):
@@ -122,6 +117,9 @@ class ElectronRemoteDebugger(object):
 
 
 if __name__ == "__main__":
+    with open('script.js', 'r') as f:
+        script_to_inject = f.read()
+
     erb = ElectronRemoteDebugger("localhost", 8888)
     for w in erb.windows():
-        print(erb.eval(w, SCRIPT_HOTKEYS_F12_DEVTOOLS_F5_REFRESH))
+        logger.debug(erb.eval(w, script_to_inject))
