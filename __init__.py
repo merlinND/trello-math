@@ -71,7 +71,8 @@ class ElectronRemoteDebugger(object):
                 # ignore it
                 last_exception = ce
             time.sleep(delay)
-        raise ce
+        if last_exception:
+            raise last_exception
 
 
     def eval(self, w, expression):

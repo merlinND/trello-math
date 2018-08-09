@@ -3,10 +3,69 @@
  */
 
 function triggerMath() {
-    if (MathJax !== undefined) {
+    if (typeof MathJax !== 'undefined') {
+        console.log("Triggering typesetting")
         MathJax.Hub.Queue(['Typeset', MathJax.Hub]);
     }
 }
+
+/**
+ * Automatically queue Math preview when the DOM changes (e.g. when new content
+ * has been added by the user, navigation happened, etc).
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
+ */
+function setupMutationObserver() {
+    // // Select the node that will be observed for mutations
+    // var targetNode = document.getElementById('some-id');
+    // // Options for the observer (which mutations to observe)
+    // var config = { attributes: false, childList: true, subtree: true };
+
+    // // Callback function to execute when mutations are observed
+    // var observer = new MutationObserver(function(mutationsList) {
+    //     console.log(mutationsList);
+    //     triggerMath();
+    // });
+
+    // observer.observe(targetNode, config);
+
+    // TODO: Find more specific events?
+    // - Card opened / closed
+    // - Board opened / closed
+    // - Card description done editing
+
+    var target = document.querySelector('#classic');
+    var options = { attributes: false, childList: true, characterData: true, subtree: true };
+    var observer = new MutationObserver(function(r) {
+        // Heuristics to prune unnecessary typesets
+        if (r.length <= 1) {
+            return;
+        }
+        r0 = r[0];
+        if (r[0].addedNodes.length <= 0) {
+            return;
+        }
+        a0 = r[0].addedNodes[0].attributes
+        if (a0 !== undefined && ('class' in a0) && a0['class'].value.indexOf("badge") >= 0) {
+            return;
+        }
+
+
+        // TODO: more specific focus for the typesetting operation
+        console.log("From parent: " + r);
+        triggerMath();
+    });
+    observer.observe(target, options);
+
+    var target = document.querySelector('.window-overlay');
+    var options = { attributes: false, childList: true, characterData: true, subtree: true };
+    var observer = new MutationObserver(function(r) {
+        // TODO: more specific focus for the typesetting operation
+        console.log("From window: " + r);
+        triggerMath();
+    });
+    observer.observe(target, options);
+}
+
 
 document.addEventListener("keydown", function (e) {
     if (e.which === 123) {
@@ -45,28 +104,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });                                                                               \
     ";
 
-    // TODO: MathJax observer for Trello. Requires findings events for:
-    // - Card opened / closed
-    // - Board opened / closed
-    // - Card description done editing
-
-    // var mathjax_observer = document.createElement('script');
-    // mathjax_observer.type = 'text/x-mathjax-config';
-    // mathjax_observer.text = `
-    //     var target = document.querySelector('#messages_container');
-    //     var options = { attributes: false, childList: true, characterData: true, subtree: true };
-    //     var observer = new MutationObserver(function (r, o) { MathJax.Hub.Queue(['Typeset', MathJax.Hub]); });
-    //     observer.observe(target, options);
-    // `;
-
     var mathjax_script = document.createElement('script');
     mathjax_script.type = 'text/javascript';
     mathjax_script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-MML-AM_CHTML';
 
     document.head.appendChild(mathjax_config);
-    // document.head.appendChild(mathjax_observer);
     document.head.appendChild(mathjax_script);
 
     console.log("MathJax scripts added.");
     triggerMath();
+    setupMutationObserver();
 });
